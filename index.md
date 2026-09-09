@@ -7,4 +7,4 @@ title: Stats-Portfolio
 This is where I post my assignments to the portfolio for Stats
 
 ### Basic R Exercises - Solutions
-[Click here to view or download my assignment PDF](Day_3.pdf)
+[Click here to view or download my assignment](Day_3.pdf)
