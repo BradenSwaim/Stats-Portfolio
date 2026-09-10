@@ -1,0 +1,319 @@
+
+#What I did ...
+#I first took the file and immediately changed the path of the data. Then I ran the code and fixed the first error which was in line 174 which was simple enough as it just had a missing parenthase. 
+#The next error after I ran it a second time was in line 192 which was an error about "cannot open the connectio". This one was fun to deal with as I dont think it as intentional, it was because of syntax / formatting differences between Windows and Mac with how they format file locations.
+#This required me to change the "lines" assignment line from "\\" to "/" to be able to load the files properly. 
+#The next error was in line 319 with ptpmeans[, 3] being "out of bounds", this (after a lot of troubleshooting and placing random print functions throughout to test checkpoints of variables to try and figure out where the error occured) was due to two reasons, both were within the "trim" assignment lines.
+#The problem itself was that the trim variable contained all colnames but the output was empty. 
+#The first problem in that line was about the variable name, the alldata$correct was not right as the C in correct is capitalized in the alldata varaible.
+#The second problem was within the ptpmeans assignment line because "trim" was empty that line would not run. 
+
+
+
+
+
+
+
+
+# Clears all objects from the R workspace
+rm(list=ls())
+
+# The folder where the data are saved. This should be the folder that includes all the participant subfolders
+pathtodata <- "/Users/bradenswaim/Files/School/Grad/S1/Stats/Code/Fix Broken Script/LING 910 sample priming data"
+
+
+### What the DMDX codes in the data mean
+# 100,000 place tells whether this is a critical word (2), filler (1), pseudoword (3), or practice (4)
+# 10,000 place tells whether this is a target (2) or prime (1) 
+# 1000s place give the tone
+# 100s place gives the condition. identical (1), morphological (2), or unprimed (3)
+# tens-ones place tells the item number
+# So for example, a code of 223211 tells us:
+#	this is a critical word (2)
+#	this is a target (2)
+#	this is a tone-3 word (3)
+#	this target had a morph
+
+### A function that reads and organizes the DMDX file for one subject
+### Inputs:
+###	participant: the name of the folder that this participant's data are in (e.g. "ptp017", "ptp014_new", etc.)
+### Outputs:
+###	data: a big data frame consisting of the participants' data, rearranged from messy DMDX format into beautiful R format
+readdmdx <- function(participant){
+  
+  # This line combines the path you specified at the beginning of the script, with the name of this participant's folder within that path
+  ptpfolder <- paste0(pathtodata, "/", participant)
+  
+  # This finds the participant's data file within their folder. 
+  # Each participant's folder has a bunch of extra junk that we don't need. The participant's actual data are in a file named "target1.azk", 
+  #	"target2.azk", or "target3.azk" (depending on whether they did Latin square list 1, 2, or 3). This line of code finds that [very messily].
+  # Specifically, it goes through each file within the folder, and checks whether (a) that file ends with ".azk", and (b) that file begins with "target".
+  #	After doing that, it identifies the one file that meets those conditions, which is the file we're looking for
+  file <- dir(ptpfolder)[ unlist( lapply( dir(ptpfolder), function(x){ (substr(x, nchar(x)-3, nchar(x)) == ".azk") & (substr(x, 1, 6) == "target") } ) ) ]
+  
+  # Reads the file line by line	
+  # When I work with DMDX data, I have to work with the more complicated scan() functions (which reads data one line at a time -- so e.g.
+  #	if you have 1000 lines of data in your file, scan() just gives back 1000 sentence-like strings) instead of the more convenient
+  #	read.table() function, which gives the data back as an R data frame. Why do I have to do this? Because read.table() relies on
+  #	the data already being in table format, with tidy rows and columns and headers at the top. DMDX data aren't like this; they have
+  #	a lot of junk at the top. If you tried using read.table(), R would get confused because it would treat the first line as column
+  #	headers, and then it would be like "wtf, why do you have 8 column headers but then only 2 columns of data later? i'm confused".
+  #	Normally you could solve this problem by just using read.table() and telling it to ignore like the first 10 lines of data, so
+  #	that it just starts at the actual data which are in two tidy columns. But that still doesn't solve the problem, because DMDX
+  #	sometimes also includes error messages in the middle of the data, for places where there were screen framerate issues. That
+  #	confuses DMDX (it's looking for two tidy columns of data, but sometimes there's a random sentence in the middle). So, bottom
+  #	line, I have to use this messier solution to first read each line of the file. After that I will later kick out all the lines
+  #	that AREN'T data, then finally organize the remaining stuff into a neat R data frame.
+  lines <- scan(
+    file=paste(ptpfolder,file,sep="/"),	# the file to read
+    "char",					# specifies that the contents of the file are text (character strings)
+    sep="\n"				# specifies to split the file at the end of each line
+  )
+  
+  # Finds which lines are actual data, as opposed to warning messages and header lines and stuff.
+  # Does this by finding lines that begin with a space or a number. (Lines that begin with anything else are junk)
+  good <- unlist(
+    lapply(				# the lapply function applies a process (below) to each line of data. unlist() puts the result in array format
+      lines,
+      function(x){( substr(x,1,1)==" " | !is.na(as.numeric(substr(x,1,1))) ) & (substr(x,nchar(x),nchar(x))!="*")} # Checks whether the first character of the line is a space or a number, and the last line is not a "*" from an abort
+    )
+  )
+  
+  # Splits the data into columns	
+  data <- do.call(rbind,				# do.call(rbind,...) takes a list of things and organizes then into rows. The list of things will be each row, split up into columns
+                  strsplit(			# splits each row into columns (the do.call() wrapped around this will organize these into rows) 
+                    trimws(lines[good]),	# what to split: each line (with beginning and ending whitespaces trimmed off
+                    "\\s+", perl=T		# a perl regular expression that catches any series of one or more whitespaces, and splits the string there
+                  )
+  )
+  
+  # Turns this into an R data frame (takes off the first line, which is header stuff apparently)
+  data <- data.frame( data[2:nrow(data),] )
+  
+  # Gives useful column names to refer to
+  colnames(data) <- c("Code","RT")
+  
+  # Makes sure these are treated as numeric, rather than R factors
+  data$Code <- as.numeric( as.character( data$Code ) )
+  data$RT <- as.numeric( as.character( data$RT ) )
+  
+  ### fix some codes that were messed up. These are just spots where we found mistakes in our DMDX
+  ###	script, such that [for those particular participants] certain trials had the wrong code on them.
+  
+  data[ data$Code==122103, "Code" ] <- 222103
+  
+  if (file=="target2.azk" & participant %in% c("ptp002","ptp005","ptp008","ptp011")){
+    data <- data[ data$Code!=122205, ]
+  }
+  
+  if (file=="target2.azk" & participant %in% c("ptp002","ptp005","ptp008","ptp011")){
+    data[ data$Code==221124, "Code"] <- 121124
+  }
+  if (file=="target3.azk" & participant %in% c("ptp003","ptp006","ptp009", "ptp012")){
+    data[ data$Code==221124, "Code"] <- 121124
+  }
+  
+  
+  
+  ### Adding additional useful information into the data frame. This is basically all information
+  ###	that's packed into the DMDX code (see the breakdown at the top of this script), but now
+  ###	I want to separate it out into different columns so I can actually use it later.
+  
+  # By DMDX convention, incorrect responses are marked as negative. So this indicates whether the row corresponds to a correct or incorrect response
+  # With this, we'll now have a column telling us whether each trial had a correct or incorrect response. Yay!
+  data$Correct <- data$RT > 0
+  
+  # Turns all the RTs into positive numbers (now that we don't need the negatives anymore to see response accuracy).
+  # Recall that DMDX codes accuracy weirdly. If someone responds in 500 ms but they press the wrong button, DMDX
+  #	calls that a RT of "-500". That doesn't actually mean that the person responded in -500 ms (i.e., 500 ms
+  #	before seeing the stimulus); it's just DMDX-speak for a 500 ms RT that was incorrect. This line and the
+  #	previous line fix that confusion, separating accuracy and RT into different columns.
+  data$RT <- abs(data$RT)
+  
+  # This column will indicate whether the trial is a nonword or word, based on our coding scheme
+  # floor(data$Code/100000) is a math way of telling us whether the first number of the code is
+  #	1, 2, 3, or 4. (Get used to seeing this sort of thing; I use this and remainder division
+  #	a lot in this script to pull out the relevant numbers from each DMDX code.) And, based on
+  #	the code breakdown at the top of this script, codes starting with 1 and 2 are real words
+  #	(critical words and filler real words), and codes startign with 3 are pseudowords. Codes
+  #	starting with 4 are practice, which we don't care about.
+  data$Lexicality <- c( "word", "word", "pseudoword", "practice" )[ floor(data$Code/100000 ) ]
+  
+  # Throws away the practice trials (see, I told you we don't care about them)
+  # Specifically, this works by looking at the data frame, and keeping every row that is NOT practice
+  data <- data[ data$Lexicality!="practice", ]
+  
+  # Codes Lexicality as a factor
+  data$Lexicality <- factor(data$Lexicality)
+  
+  # Calculates the item number, based on our coding scheme (the last two digits--tens and ones place--give the item number)
+  # "%%" is remainder division (a.k.a. modulus division). For example, if you take 305/100, you have a remainder of 5. In R, "300 %% 100" returns "5".
+  data$Item <- data$Code %% 100
+  
+  # Calculates the target tone, based on our coding scheme (the thousands place gives the tone number)
+  data$TargetTone <- factor(substr(data$Code%%10000,1,1), levels=1:4)
+  
+  # Marks whether this word was a critical word, based on our coding scheme (critical are in the 200,000s and fillers are in the 100,000s)
+  data$Critical <- ifelse( floor(data$Code/100000 ) %in% c(1,3) | data$TargetTone %in% c(1,4), F, T )
+  
+  # Finds the condition code in our coding scheme (the hundreds place)
+  data$Condition <- c( NA, "identical", "morphological", "unprimed" )[ floor( ( data$Code%%1000 )/100 ) + 1 ]
+  data[ !data$Critical, "Condition" ] <- NA
+  
+  # Due to a coding error, a few participants didn't see half of the primes. That means that, for those
+  # 	participants, the corresponding targets are all "unprimed", in spite of what the DMDX code says.
+  # This bit of code fixes that. It finds the missed items from the list of participants that I specified
+  #	(based on me and my RA's records), and changes the Condition for all those items to "unprimed".
+  if (participant %in% c("ptp001", "ptp004", "ptp007", "ptp010", "ptp013", "ptp016", "ptp018", "ptp022")){
+    misseditems <- c(seq(4, 70, by=6), seq(2, 68, by=6))
+    data[ data$Item %in% misseditems, "Condition" ] <- "unprimed"
+  }
+  
+  # Adds trial number
+  data$TrialNum <- 1:nrow(data)
+  
+  
+  # Puts a subject identifier in each row
+  data$Participant <- participant
+  
+  # The list number
+  data$List <- as.numeric(substr(file, 7, 7))
+  return(data)
+}
+
+
+
+
+
+
+
+
+### Reads the data from all participants
+
+# This will show how long the whole process took
+system.time( 
+  
+  # Just like above: do.call(rbind,...) takes a list of objects and organizes them into rows
+  alldata <- do.call(rbind,
+                      
+                      # Applies the readdmdx() function to every subject in the folder
+          lapply( dir(pathtodata), readdmdx )
+  )
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Show accuracy
+library(beeswarm)
+beeswarm( xtabs(~Participant+Correct,alldata)[,2] / xtabs(~Participant,alldata) * 100, ylim=c(0,100), ylab="Accuracy (%)" )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Outlier exclusion
+
+# only keep critical trials, and from participants with >75% accuracy
+alldata <- alldata[ alldata$Critical & !(alldata$Participant %in% c("ptp002","ptp006")), ]
+print(alldata)
+
+# Each participant's median - 1.5*IQR
+ptpmincutoffs <- tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Participant"], median ) - 1.5*tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Participant"], IQR )
+
+# Each participant's median + 1.5*IQR
+ptpmaxcutoffs <- tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Participant"], median ) + 1.5*tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Participant"], IQR )
+
+# Each item's median - 1.5*IQR
+itemmincutoffs <- tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Item"], median ) - 1.5*tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Item"], IQR )
+
+# Each item's median + 1.5*IQR
+itemmaxcutoffs <- tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Item"], median ) + 1.5*tapply( alldata[alldata$Correct,"RT"], alldata[alldata$Correct,"Item"], IQR )
+
+# identifies the outliers (data outside of any of these cutoffs)
+alldata$outlier <- (alldata$RT < itemmincutoffs[alldata$Item]) | (alldata$RT > itemmaxcutoffs[alldata$Item]) | (alldata$RT < ptpmincutoffs[alldata$Participant]) | (alldata$RT > ptpmaxcutoffs[alldata$Participant])
+print(alldata)
+# Removes nonwords, primes, incorrect responses, outliers, and responses faster than 200 ms
+
+
+sum(alldata$Correct & alldata$RT > 200 & !alldata$outlier, na.rm = TRUE)
+
+
+trim <- alldata[which(alldata$Correct & alldata$RT > 200 & !alldata$outlier), ]
+print(paste("Line 288 first trim assignment:", trim))
+
+# Calculates the means per condition
+( means <- tapply( trim[,"RT"], trim[,c("Condition")], mean ) )
+( ptpmeans <- tapply( trim[,"RT"], trim[,c("Participant","Condition")], mean ) )
+( itemmeans <- tapply( trim[,"RT"], trim[,c("Item","Condition")], mean ) )
+print(paste("Line 294 first ptp assignment: ", ptpmeans))
+
+beeswarm( list( ptpmeans[,3]-ptpmeans[,1], ptpmeans[,3]-ptpmeans[,2]), labels=c("Identical","Morphological"), ylab="Priming effect (unprimed minus primed), ms" )
+lines(c(-100,100), rep(0,2))
