@@ -12,3 +12,7 @@ This is where I post my assignments to the portfolio for Stats
 
 ### Fix A Broken Script - Fixed
 [Click here to view or download my assignment](Fix_A_Broken_Script.txt)
+
+### Reflection on Programming
+[Click here to view or download my assignment](Reflection_on_Programming.docx)
+
