@@ -21,3 +21,6 @@ This is where I post my assignments to the portfolio for Stats
 
 ### Fun R Script - Reflection
 [Click here to view or download my assignment](Fun_Script_Reflection.docx)
+
+### Reflection on Regression
+[Click here to view or download my assignment](Reflection_on_Regression.docx)
